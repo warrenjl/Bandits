@@ -1,2 +1,2 @@
 # Bandits
-Code for simulation studies comparing the performances of different bandit algorithms. 
+Code for implementing RTS_P and RTS_NB.
