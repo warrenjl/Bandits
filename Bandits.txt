@@ -1,0 +1,355 @@
+bandits<-function(total_locations,
+                  tests,
+                  positives,
+                  location,
+                  method){
+
+         complete_tests<-
+         complete_positives<-
+         complete_negatives<-rep(0,
+                                 times = total_locations)
+
+         time_period<-0
+
+         a_beta_rts_p<-
+         b_beta_rts_p<-
+         c_gamma_rts_p<-rep(1.00,
+                            times = total_locations)
+         d_gamma_rts_p<-rep(0.0001,
+                            times = total_locations)
+
+         a_beta_rts_nb<-
+         b_beta_rts_nb<-
+         c_beta_rts_nb<-
+         d_beta_rts_nb<-rep(1.00,
+                            times = total_locations)
+         e_beta_rts_nb<-rep(0.00,
+                            times = total_locations)
+         r_upper<-100
+         w_cat_rts_nb<-matrix((1.00/r_upper),
+                              nrow = total_locations,
+                              ncol = r_upper)
+         
+         function(total_locations,
+                  tests,
+                  positives,
+                  location,
+                  method){
+
+                 complete_tests[location]<<-complete_tests[location] +
+                                            tests
+                 complete_positives[location]<<-complete_positives[location] +
+                                                positives
+                 complete_negatives[location]<<-complete_negatives[location] +
+                                                (tests - positives)
+
+                 time_period<<-time_period + 
+                               1
+
+                 ##############################################################################
+                 #Random Thompson Sampling: Poisson
+                 ##############################################################################
+                 if(method == "RTS_P"){
+
+                   a_beta_rts_p[location]<<-a_beta_rts_p[location] +
+                                            positives
+                   b_beta_rts_p[location]<<-b_beta_rts_p[location] +
+                                            (tests - positives)
+                   draw_p<-rbeta(n = total_locations,
+                                 shape1 = a_beta_rts_p,
+                                 shape2 = b_beta_rts_p)
+      
+                   c_gamma_rts_p[location]<<-c_gamma_rts_p[location] +
+                                             tests
+                   d_gamma_rts_p[location]<<-d_gamma_rts_p[location] +
+                                             1
+                   draw_lambda<-rgamma(n = total_locations,
+                                       shape = c_gamma_rts_p,
+                                       rate = d_gamma_rts_p)
+
+                   go_to<-c(1:total_locations)[(draw_lambda*draw_p) == max(draw_lambda*draw_p)]
+
+                   return(list(complete_tests = complete_tests,
+                               complete_positives = complete_positives,
+                               complete_negatives = complete_negatives,
+                               time_period = time_period,
+                               a_beta_rts_p = a_beta_rts_p,
+                               b_beta_rts_p = b_beta_rts_p,
+                               c_gamma_rts_p = c_gamma_rts_p,
+                               d_gamma_rts_p = d_gamma_rts_p,
+                               go_to = go_to))
+                   
+                   }
+
+                 ########################################################################################################################
+                 #Random Thompson Sampling: Negative Binomial
+                 ########################################################################################################################
+                 if(method == "RTS_NB"){
+
+                   log_w<-rep(NA,
+                              times = r_upper)
+                   for(j in 1:r_upper){
+                      log_w[j]<-log(w_cat_rts_nb[location, j]) +
+                                log(choose((tests + j - 1), tests)) + 
+                                lbeta((tests + c_beta_rts_nb[location]), (d_beta_rts_nb[location] + j*(e_beta_rts_nb[location] + 1))) +
+                                -lbeta(c_beta_rts_nb[location], (d_beta_rts_nb[location] + j*e_beta_rts_nb[location]))
+                      }
+                   for(j in 1:r_upper){
+                      w_cat_rts_nb[location, j]<<-1.00/sum(exp(log_w - log_w[j]))
+                      }
+                   w_cat_rts_nb[location,][is.na(w_cat_rts_nb[location,]) == 1]<<-0.00
+                   draw_r<-rep(NA,
+                               times = total_locations)
+                   for(j in 1:total_locations){
+                      draw_r[j]<-sample(c(1:r_upper),
+                                        prob = w_cat_rts_nb[j,],
+                                        size = 1)
+                      }
+
+                   c_beta_rts_nb[location]<<-c_beta_rts_nb[location] +
+                                             tests
+                   e_beta_rts_nb[location]<<-e_beta_rts_nb[location] +
+                                             1
+                   draw_pi<-rbeta(n = total_locations,
+                                  shape1 = c_beta_rts_nb,
+                                  shape2 = (d_beta_rts_nb + e_beta_rts_nb*draw_r))
+      
+                   a_beta_rts_nb[location]<<-a_beta_rts_nb[location] +
+                                             positives
+                   b_beta_rts_nb[location]<<-b_beta_rts_nb[location] +
+                                             (tests - positives)
+                   draw_p<-rbeta(n = total_locations,
+                                 shape1 = a_beta_rts_nb,
+                                 shape2 = b_beta_rts_nb)
+                   go_to<-c(1:total_locations)[(draw_pi*draw_r*draw_p/(1.00 - draw_pi)) == max((draw_pi*draw_r*draw_p/(1.00 - draw_pi)))]
+
+                   return(list(complete_tests = complete_tests,
+                               complete_positives = complete_positives,
+                               complete_negatives = complete_negatives,
+                               time_period = time_period,
+                               a_beta_rts_nb = a_beta_rts_nb,
+                               b_beta_rts_nb = b_beta_rts_nb,
+                               c_beta_rts_nb = c_beta_rts_nb,
+                               d_beta_rts_nb = d_beta_rts_nb,
+                               e_beta_rts_nb = e_beta_rts_nb,
+                               w_cat_rts_nb = w_cat_rts_nb,
+                               go_to = go_to))
+
+                   }
+
+                 }
+
+         }
+
+#######################################################
+#Testing Function:  Constant Prevalence and Tests
+#######################################################
+set.seed(1682)
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rep(0.40,
+            times = total_locations)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-10
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[1])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   } 
+par(mfrow = c(2,2)) 
+plot(results$complete_tests, 
+     (tests*true_p),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Constant Tests
+#######################################################
+set.seed(4639)
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-10
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   } 
+plot(results$complete_tests, 
+     (tests*true_p),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Poisson Tests
+#######################################################
+set.seed(9874)
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+true_lambda<-rgamma(n = total_locations,
+                    shape = 10,
+                    rate = 1)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-rpois(n = 1,
+             lambda = true_lambda[location])
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   tests<-rpois(n = 1,
+                lambda = true_lambda[location])
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   }  
+plot(results$complete_tests, 
+     (true_p*true_lambda),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Negative Binomial Tests
+#######################################################
+set.seed(2329)
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+true_pi<-rbeta(n = total_locations,
+               shape1 = 1.00,
+               shape2 = 1.00)
+true_r<-sample(c(1:100),
+               size = total_locations,
+               replace = TRUE)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-rnbinom(n = 1,
+               size = true_r[location],
+               p = (1.00 - true_pi[location]))
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   tests<-rnbinom(n = 1,
+                  size = true_r[location],
+                  p = (1.00 - true_pi[location]))
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   }  
+plot(results$complete_tests, 
+     (true_pi*true_r*true_p/(1.00 - true_pi)),
+     pch = 16)
+
+
+
+
