@@ -1,0 +1,152 @@
+################################################################################################################################################
+#Function:  bandits
+#Purpose:  The bandits function implements the two newly developed sampling strategies (i.e., RTS_P and RTS_NB) described in 
+#          "Integrating testing volume into bandit algorithms for infectious disease surveillance". 
+#Note:  The function takes input one time period at a time and keeps track of the totals (tests, positives, negatives) across time periods.  
+#       It returns all relevant information (totals and posteriors) as well as the location that should be sampled from on the next time period.
+#       The priors for each of the algorithms match those from the publication.  
+################################################################################################################################################ 
+
+bandits<-function(total_locations,  #Number of locations
+                  tests,            #Number of tests performed during the given time period
+                  positives,        #Number of positive tests during the given time period
+                  location,         #The location that was visited during the given time period
+                  method){          #Selected sampling method (Poisson: "RTS_P" or Negative Binomial: "RTS_NB")
+
+         complete_tests<-
+         complete_positives<-
+         complete_negatives<-rep(0,
+                                 times = total_locations)
+
+         time_period<-0
+
+         a_beta_rts_p<-
+         b_beta_rts_p<-
+         c_gamma_rts_p<-rep(1.00,
+                            times = total_locations)
+         d_gamma_rts_p<-rep(0.0001,
+                            times = total_locations)
+
+         a_beta_rts_nb<-
+         b_beta_rts_nb<-
+         c_beta_rts_nb<-
+         d_beta_rts_nb<-rep(1.00,
+                            times = total_locations)
+         e_beta_rts_nb<-rep(0.00,
+                            times = total_locations)
+         r_upper<-100
+         w_cat_rts_nb<-matrix((1.00/r_upper),
+                              nrow = total_locations,
+                              ncol = r_upper)
+         
+         function(total_locations,
+                  tests,
+                  positives,
+                  location,
+                  method){
+
+                 complete_tests[location]<<-complete_tests[location] +
+                                            tests
+                 complete_positives[location]<<-complete_positives[location] +
+                                                positives
+                 complete_negatives[location]<<-complete_negatives[location] +
+                                                (tests - positives)
+
+                 time_period<<-time_period + 
+                               1
+
+                 ##############################################################################
+                 #Random Thompson Sampling: Poisson
+                 ##############################################################################
+                 if(method == "RTS_P"){
+
+                   a_beta_rts_p[location]<<-a_beta_rts_p[location] +
+                                            positives
+                   b_beta_rts_p[location]<<-b_beta_rts_p[location] +
+                                            (tests - positives)
+                   draw_p<-rbeta(n = total_locations,
+                                 shape1 = a_beta_rts_p,
+                                 shape2 = b_beta_rts_p)
+      
+                   c_gamma_rts_p[location]<<-c_gamma_rts_p[location] +
+                                             tests
+                   d_gamma_rts_p[location]<<-d_gamma_rts_p[location] +
+                                             1
+                   draw_lambda<-rgamma(n = total_locations,
+                                       shape = c_gamma_rts_p,
+                                       rate = d_gamma_rts_p)
+
+                   go_to<-c(1:total_locations)[(draw_lambda*draw_p) == max(draw_lambda*draw_p)]
+
+                   return(list(complete_tests = complete_tests,
+                               complete_positives = complete_positives,
+                               complete_negatives = complete_negatives,
+                               time_period = time_period,
+                               a_beta_rts_p = a_beta_rts_p,
+                               b_beta_rts_p = b_beta_rts_p,
+                               c_gamma_rts_p = c_gamma_rts_p,
+                               d_gamma_rts_p = d_gamma_rts_p,
+                               go_to = go_to))
+                   
+                   }
+
+                 ########################################################################################################################
+                 #Random Thompson Sampling: Negative Binomial
+                 ########################################################################################################################
+                 if(method == "RTS_NB"){
+
+                   log_w<-rep(NA,
+                              times = r_upper)
+                   for(j in 1:r_upper){
+                      log_w[j]<-log(w_cat_rts_nb[location, j]) +
+                                log(choose((tests + j - 1), tests)) + 
+                                lbeta((tests + c_beta_rts_nb[location]), (d_beta_rts_nb[location] + j*(e_beta_rts_nb[location] + 1))) +
+                                -lbeta(c_beta_rts_nb[location], (d_beta_rts_nb[location] + j*e_beta_rts_nb[location]))
+                      }
+                   for(j in 1:r_upper){
+                      w_cat_rts_nb[location, j]<<-1.00/sum(exp(log_w - log_w[j]))
+                      }
+                   w_cat_rts_nb[location,][is.na(w_cat_rts_nb[location,]) == 1]<<-0.00
+                   draw_r<-rep(NA,
+                               times = total_locations)
+                   for(j in 1:total_locations){
+                      draw_r[j]<-sample(c(1:r_upper),
+                                        prob = w_cat_rts_nb[j,],
+                                        size = 1)
+                      }
+
+                   c_beta_rts_nb[location]<<-c_beta_rts_nb[location] +
+                                             tests
+                   e_beta_rts_nb[location]<<-e_beta_rts_nb[location] +
+                                             1
+                   draw_pi<-rbeta(n = total_locations,
+                                  shape1 = c_beta_rts_nb,
+                                  shape2 = (d_beta_rts_nb + e_beta_rts_nb*draw_r))
+      
+                   a_beta_rts_nb[location]<<-a_beta_rts_nb[location] +
+                                             positives
+                   b_beta_rts_nb[location]<<-b_beta_rts_nb[location] +
+                                             (tests - positives)
+                   draw_p<-rbeta(n = total_locations,
+                                 shape1 = a_beta_rts_nb,
+                                 shape2 = b_beta_rts_nb)
+                   go_to<-c(1:total_locations)[(draw_pi*draw_r*draw_p/(1.00 - draw_pi)) == max((draw_pi*draw_r*draw_p/(1.00 - draw_pi)))]
+
+                   return(list(complete_tests = complete_tests,
+                               complete_positives = complete_positives,
+                               complete_negatives = complete_negatives,
+                               time_period = time_period,
+                               a_beta_rts_nb = a_beta_rts_nb,
+                               b_beta_rts_nb = b_beta_rts_nb,
+                               c_beta_rts_nb = c_beta_rts_nb,
+                               d_beta_rts_nb = d_beta_rts_nb,
+                               e_beta_rts_nb = e_beta_rts_nb,
+                               w_cat_rts_nb = w_cat_rts_nb,
+                               go_to = go_to))
+
+                   }
+
+                 }
+
+         }
+

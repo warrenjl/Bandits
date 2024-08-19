@@ -1,0 +1,216 @@
+#######################################################
+#Testing Function:  Constant Prevalence and Tests
+#######################################################
+set.seed(1682)
+
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rep(0.40,
+            times = total_locations)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-10
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[1])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   } 
+par(mfrow = c(2,2)) 
+plot(results$complete_tests, 
+     (tests*true_p),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Constant Tests
+#######################################################
+set.seed(4639)
+
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-10
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   } 
+plot(results$complete_tests, 
+     (tests*true_p),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Poisson Tests
+#######################################################
+set.seed(9874)
+
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+true_lambda<-rgamma(n = total_locations,
+                    shape = 10,
+                    rate = 1)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-rpois(n = 1,
+             lambda = true_lambda[location])
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   tests<-rpois(n = 1,
+                lambda = true_lambda[location])
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   }  
+plot(results$complete_tests, 
+     (true_p*true_lambda),
+     pch = 16)
+
+#######################################################
+#Testing Function:  Negative Binomial Tests
+#######################################################
+set.seed(2329)
+
+method<-"RTS_P"
+total_locations<-100
+study_length<-10000
+true_p<-rbeta(n = total_locations,
+              shape1 = 1.00,
+              shape2 = 1.00)
+true_pi<-rbeta(n = total_locations,
+               shape1 = 1.00,
+               shape2 = 1.00)
+true_r<-sample(c(1:100),
+               size = total_locations,
+               replace = TRUE)
+
+#Initialization
+test_fun<-bandits(total_locations = total_locations, 
+                  tests = 0, 
+                  positives = 0, 
+                  location = 0, 
+                  method = method)  
+#Day 1:
+location<-1
+tests<-rnbinom(n = 1,
+               size = true_r[location],
+               p = (1.00 - true_pi[location]))
+positives<-rbinom(n = 1,
+                  size = tests,
+                  prob = true_p[location])
+results<-test_fun(total_locations = total_locations, 
+                  tests = tests, 
+                  positives = positives, 
+                  location = location, 
+                  method = method)   
+
+#Days 2 to study_length:
+for(t in 2:study_length){
+
+   location<-results$go_to
+   tests<-rnbinom(n = 1,
+                  size = true_r[location],
+                  p = (1.00 - true_pi[location]))
+   positives<-rbinom(n = 1,
+                     size = tests,
+                     prob = true_p[location])
+   results<-test_fun(total_locations = total_locations, 
+                     tests = tests, 
+                     positives = positives, 
+                     location = location, 
+                     method = method)
+   print(results$go_to)
+
+   }  
+plot(results$complete_tests, 
+     (true_pi*true_r*true_p/(1.00 - true_pi)),
+     pch = 16)
+
+
+
+
